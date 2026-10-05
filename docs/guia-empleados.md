@@ -9,7 +9,7 @@ Se instala una sola vez y queda con su ícono, como cualquier app. No hace falta
 1. Abrí el link en **Safari** (tiene que ser Safari, no Chrome ni WhatsApp).
 2. Tocá el botón **Compartir** (el cuadrado con la flecha hacia arriba).
 3. Bajá y tocá **Agregar a pantalla de inicio**.
-4. Tocá **Agregar**. Aparece el ícono del camión amarillo.
+4. Dejá activado **Abrir como app web** (si aparece) y tocá **Agregar**. Aparece el ícono del camión amarillo.
 
 ## Android
 
