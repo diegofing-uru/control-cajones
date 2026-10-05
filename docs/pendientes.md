@@ -1,26 +1,30 @@
 # Pendientes
 
-## Registro con celular falla ("No se pudo crear la cuenta")
+## ✅ Resuelto (2026-10-05): registro con celular fallaba ("No se pudo crear la cuenta")
 
-**Detectado:** 2026-10-05, al crear una cuenta con celular desde la app instalada. Con email funciona.
+**Causa:** en Supabase la confirmación por celular estaba activada (`/auth/v1/settings` devolvía
+`"phone_autoconfirm": false`). Al registrarse con celular, Supabase intentaba mandar un SMS, no había
+proveedor de SMS y el alta fallaba. Con email funcionaba porque esa confirmación sí estaba desactivada.
 
-**Causa:** en Supabase la confirmación por celular quedó **activada**. El endpoint público
-`/auth/v1/settings` devuelve `"phone_autoconfirm": false` (y `"mailer_autoconfirm": true`).
-Al registrarse con celular, Supabase intenta mandar un SMS de confirmación, no hay proveedor
-de SMS configurado y el alta falla.
+**Por qué costó:** el panel de Supabase no deja desactivar "Enable phone confirmations" sin un
+proveedor de SMS cargado, y la CLI (v2.119) lee `[auth.sms] enable_confirmations` al revés: marcaba el
+cambio como aplicado pero el servidor no cambiaba.
 
-`supabase/config.toml` ya dice `[auth.sms] enable_confirmations = false` y `supabase config diff`
-no muestra diferencias, así que la CLI no detecta el problema: hay que forzarlo.
+**Solución aplicada (parche):** en **Authentication > Sign In / Providers > Phone** se cargaron datos
+de Twilio **de relleno** (no son una cuenta real) y se desactivó "Enable phone confirmations".
+`supabase/config.toml` quedó sincronizado con el servidor y tiene un comentario explicándolo.
 
-**Cómo arreglarlo (cualquiera de las dos):**
-- Panel de Supabase: **Authentication > Sign In / Providers > Phone** → desactivar
-  **Enable phone confirmations** y guardar.
-- CLI: poner `enable_confirmations = true` en `[auth.sms]`, `supabase config push`, volver a
-  `false` y `supabase config push` de nuevo, para que mande el valor explícitamente.
+- Nunca se manda un SMS, así que los datos de relleno no se usan.
+- Si algún día se quiere mandar SMS de verdad (códigos, recuperar contraseña por SMS), hay que
+  reemplazarlos por una cuenta real de Twilio u otro proveedor.
+- Verificar: `curl <SUPABASE_URL>/auth/v1/settings -H "apikey: <anon>"` → `"phone_autoconfirm": true`.
 
-**Verificar:** `/auth/v1/settings` tiene que devolver `"phone_autoconfirm": true`. Después probar
-un registro con celular (esa cuenta queda pendiente de aprobación; rechazarla o desactivarla si fue de prueba).
+**Alternativa más prolija (no aplicada):** que la app registre los celulares como un email interno
+(ej. `59899123456@tel.control-mudanzas`) y no use el login por celular de Supabase. Elimina la
+dependencia de esta configuración. Si se hace, avisar a quien arma los zips del proyecto.
 
-**Mejora en la app:** el mensaje "No se pudo crear la cuenta. Probá de nuevo." oculta el error real.
-En `src/lib/auth.tsx` (función `registrarse`) conviene mostrar algo más útil o registrar `error.message`
-para diagnosticar más rápido.
+## Mejora: mensajes de error al registrarse
+
+"No se pudo crear la cuenta. Probá de nuevo." oculta el error real. En `src/lib/auth.tsx`
+(función `registrarse`) conviene mostrar algo más útil o registrar `error.message` para diagnosticar
+más rápido.
