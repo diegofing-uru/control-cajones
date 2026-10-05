@@ -68,9 +68,14 @@ EXPO_PUBLIC_DEMO=1 EXPO_PUBLIC_SUPABASE_URL=https://demo.supabase.co EXPO_PUBLIC
 
 Usuarios de prueba: `admin@demo.uy` (administradora) y el celular `098 111 222` (operario), contraseña `demo1234`. Hay una cuenta pendiente de aprobación para probar ese flujo.
 
-### Demo publicada en GitHub Pages
+### Demo y app publicadas en GitHub Pages
 
-El workflow `.github/workflows/demo.yml` genera la demo como una única página (`npm run demo:build`) y la publica en cada push a `main`. Para activarlo, una sola vez: **Settings > Pages > Source: GitHub Actions**. Queda en `https://<usuario>.github.io/control-cajones/` y se puede abrir desde cualquier celular.
+El workflow `.github/workflows/demo.yml` publica dos versiones en cada push a `main`, cada una como una única página (`scripts/build-web.mjs`):
+
+- **Demo** (`npm run demo:build`): sin backend, con datos de prueba. Queda en `https://<usuario>.github.io/control-cajones/`.
+- **App real** (`npm run app:build`): conectada a Supabase e instalable en el celular desde el navegador (PWA, sin tiendas), con ícono propio y uso sin señal. Queda en `https://<usuario>.github.io/control-cajones/app/`. Toma la URL y la anon key de las variables del repositorio `SUPABASE_URL` y `SUPABASE_ANON_KEY` (**Settings > Secrets and variables > Actions > Variables**).
+
+Para activarlo, una sola vez: **Settings > Pages > Source: GitHub Actions**. La guía para instalarla en los celulares está en [docs/guia-empleados.md](docs/guia-empleados.md).
 
 ## Estructura
 

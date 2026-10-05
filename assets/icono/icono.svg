@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fondo asfalto (sin bordes redondeados: cada sistema aplica su máscara) -->
+  <rect width="512" height="512" fill="#18222B"/>
+  <!-- Calle -->
+  <rect x="64" y="372" width="384" height="10" rx="5" fill="#2C3943"/>
+  <!-- Caja de carga -->
+  <rect x="78" y="168" width="232" height="168" rx="14" fill="#FFC21A"/>
+  <!-- Cinta de embalar sobre la caja -->
+  <rect x="78" y="226" width="232" height="18" fill="#E0A500"/>
+  <!-- Cajas de cartón asomando -->
+  <rect x="104" y="128" width="58" height="48" rx="5" fill="#B27A42"/>
+  <rect x="104" y="146" width="58" height="8" fill="#8E5F31"/>
+  <rect x="172" y="140" width="46" height="36" rx="5" fill="#C48B50"/>
+  <rect x="190" y="140" width="10" height="36" fill="#A06C3B"/>
+  <!-- Cabina -->
+  <path d="M318 214 h66 a14 14 0 0 1 12 7 l40 66 a14 14 0 0 1 2 7 v28 a14 14 0 0 1 -14 14 h-106 z" fill="#FFC21A"/>
+  <!-- Ventanilla -->
+  <path d="M338 232 h40 l32 52 h-72 z" fill="#18222B"/>
+  <!-- Chasis -->
+  <rect x="70" y="326" width="372" height="22" rx="11" fill="#E0A500"/>
+  <!-- Ruedas -->
+  <circle cx="148" cy="350" r="36" fill="#0E151A"/>
+  <circle cx="148" cy="350" r="14" fill="#97A4AE"/>
+  <circle cx="378" cy="350" r="36" fill="#0E151A"/>
+  <circle cx="378" cy="350" r="14" fill="#97A4AE"/>
+</svg>

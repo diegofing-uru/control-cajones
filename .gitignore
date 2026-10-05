@@ -10,3 +10,8 @@ android/
 supabase/.temp/
 dist-web/
 dist-demo/
+dist-app/
+sitio/
+
+# Contraseña de la base de Supabase (no subir)
+.supabase-db-password

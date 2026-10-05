@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Redirigiendo…</title>
+<!-- GitHub Pages sirve esta página en cualquier ruta que no existe (por ejemplo al recargar
+     en /login). Vuelve al inicio de la app o de la demo, según la ruta. -->
+<script>
+  var base = "__BASE__";
+  var p = location.pathname;
+  location.replace(p.indexOf(base + "/app/") === 0 ? base + "/app/" : base + "/");
+</script>
+</head>
+<body></body>
+</html>

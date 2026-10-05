@@ -2,13 +2,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 import { ErrorNegocio, registrarMovimiento } from './api';
+import { DEMO } from './demo';
 import type { NuevoMovimiento } from './types';
 
 // En web alcanza con navigator.onLine; evita pedidos de prueba de conectividad
 if (Platform.OS === 'web') NetInfo.configure({ reachabilityShouldRun: () => false });
 
-const CLAVE = 'cola-movimientos-v1';
-const CLAVE_RECHAZOS = 'movimientos-rechazados-v1';
+// La demo y la app real pueden compartir dominio (y localStorage): claves separadas
+// para que un movimiento de prueba nunca se envíe a la base real
+const PREFIJO = DEMO ? 'demo-' : '';
+const CLAVE = `${PREFIJO}cola-movimientos-v1`;
+const CLAVE_RECHAZOS = `${PREFIJO}movimientos-rechazados-v1`;
 
 export interface Rechazado {
   movimiento: NuevoMovimiento;
