@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Control de Cajones (demo)</title>
+<style>
+  :root { color-scheme: light dark; --marco: #D9DEE3; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --marco: #0A0F13; } }
+  :root[data-theme="dark"] { --marco: #0A0F13; }
+  html, body { height: 100%; margin: 0; }
+  body { overflow: hidden; background: var(--marco); }
+  #root { display: flex; height: 100%; flex: 1; }
+  @media (min-width: 520px) {
+    body { display: flex; align-items: center; justify-content: center; }
+    #root { flex: 0 0 auto; width: 400px; height: min(860px, calc(100% - 32px)); border-radius: 28px;
+            overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  }
+</style>
+</head>
+<body>
+<noscript>Esta demo necesita JavaScript.</noscript>
+<div id="root"></div>
+<script>try { history.replaceState(null, "", "/"); } catch (e) {}</script>
+<script>
+/*APP*/
+</script>
+</body>
+</html>

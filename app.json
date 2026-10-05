@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Control de Cajones",
+    "slug": "control-cajones",
+    "scheme": "controlcajones",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "uy.fletes.controlcajones"
+    },
+    "android": {
+      "package": "uy.fletes.controlcajones",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-splash-screen"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro"
+    }
+  }
+}
