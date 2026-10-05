@@ -31,6 +31,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run demo:build
+        env:
+          DEMO_BASE_URL: /${{ github.event.repository.name }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-demo
