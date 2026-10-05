@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { avisar } from '../../src/lib/avisar';
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DireccionCard } from '../../src/components/DireccionCard';
 import { IconoCaja, IconoCajon } from '../../src/components/Iconos';
 import { Pantalla } from '../../src/components/Pantalla';
@@ -14,7 +15,7 @@ export default function Panel() {
   const { datos, refrescando, recargar } = useDatos(async () => {
     const [resumen, pendientes] = await Promise.all([resumenPanel(), listarPendientes()]);
     return { resumen, atrasadas: pendientes.filter((d) => d.atrasada) };
-  }, ['direcciones', 'movimientos', 'configuracion']);
+  }, ['direcciones', 'movimientos', 'configuracion', 'perfiles']);
   const [guardando, setGuardando] = useState(false);
 
   const r = datos?.resumen;
@@ -27,7 +28,7 @@ export default function Panel() {
       await guardarDiasAlerta(nuevo);
       await recargar();
     } catch (e) {
-      Alert.alert('No se pudo guardar', e instanceof Error ? e.message : '');
+      avisar('No se pudo guardar', e instanceof Error ? e.message : '');
     } finally {
       setGuardando(false);
     }
@@ -60,6 +61,21 @@ export default function Panel() {
       >
         {r && (
           <>
+            {r.cuentas_pendientes > 0 && (
+              <Pressable
+                onPress={() => router.push('/usuarios')}
+                style={[estilos.aviso, { backgroundColor: c.superficie, borderColor: c.pendiente }]}
+                accessibilityRole="button"
+              >
+                <Ionicons name="person-add-outline" size={22} color={c.pendiente} />
+                <Text style={{ flex: 1, fontFamily: f.fuerte, fontSize: 16, color: c.texto }}>
+                  {r.cuentas_pendientes === 1
+                    ? '1 cuenta nueva esperando aprobación'
+                    : `${r.cuentas_pendientes} cuentas nuevas esperando aprobación`}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={c.textoSuave} />
+              </Pressable>
+            )}
             <View style={estilos.grilla}>
               <Cifra valor={r.cajas_afuera} etiqueta="cajas afuera" icono={<IconoCaja size={28} color={c.kraft} />} />
               <Cifra valor={r.cajones_afuera} etiqueta="cajones afuera" icono={<IconoCajon size={28} color={c.madera} />} />
@@ -107,5 +123,6 @@ const estilos = StyleSheet.create({
   cifra: { flex: 1, padding: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   config: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   ajuste: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  aviso: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1.5 },
   enlace: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

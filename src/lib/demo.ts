@@ -4,6 +4,7 @@
  * Se activa con EXPO_PUBLIC_DEMO=1.
  */
 import type { Direccion, Movimiento, NuevoMovimiento, Perfil, Resumen, Rol } from './types';
+import type { Identificador } from './identificador';
 import { uuid } from './uuid';
 
 export const DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
@@ -13,20 +14,23 @@ export class ErrorDemo extends Error {}
 type DireccionBase = Omit<Direccion, 'dias_pendiente' | 'atrasada'>;
 type MovBase = Omit<Movimiento, 'calle' | 'usuario_nombre' | 'anulado'>;
 
+type PerfilDemo = Perfil & { password: string };
+
 interface Estado {
   version: number;
-  perfiles: (Perfil & { email: string; password: string })[];
+  perfiles: PerfilDemo[];
   direcciones: DireccionBase[];
   movimientos: MovBase[];
   diasAlerta: number;
 }
 
-const CLAVE = 'demo-control-cajones-v1';
+const CLAVE = 'demo-control-cajones-v2';
 const DIA = 86400000;
 
+/** Usuarios para entrar rápido en la demo: Marcela con email, Juan con celular */
 export const USUARIOS_DEMO = [
-  { email: 'admin@demo.uy', password: 'demo1234', nombre: 'Marcela Silva', rol: 'administrador' as Rol },
-  { email: 'juan@demo.uy', password: 'demo1234', nombre: 'Juan Rodríguez', rol: 'operario' as Rol },
+  { identificador: 'admin@demo.uy', password: 'demo1234', nombre: 'Marcela Silva', rol: 'administrador' as Rol },
+  { identificador: '098 111 222', password: 'demo1234', nombre: 'Juan Rodríguez', rol: 'operario' as Rol },
 ];
 
 function hace(dias: number, horas = 0) {
@@ -34,9 +38,15 @@ function hace(dias: number, horas = 0) {
 }
 
 function semilla(): Estado {
-  const p = USUARIOS_DEMO.map((u) => ({ id: uuid(), telefono: null, activo: true, ...u }));
-  p.push({ id: uuid(), email: 'nico@demo.uy', password: 'demo1234', nombre: 'Nicolás Pereira', rol: 'operario', telefono: null, activo: true });
-  const [marcela, juan, nico] = p as [typeof p[0], typeof p[0], typeof p[0]];
+  const base = { activo: true, pendiente: false, password: 'demo1234' };
+  const p: PerfilDemo[] = [
+    { ...base, id: uuid(), nombre: 'Marcela Silva', email: 'admin@demo.uy', telefono: null, rol: 'administrador' },
+    { ...base, id: uuid(), nombre: 'Juan Rodríguez', email: null, telefono: '+59898111222', rol: 'operario' },
+    { ...base, id: uuid(), nombre: 'Nicolás Pereira', email: 'nico@demo.uy', telefono: '+59899333444', rol: 'operario' },
+    // Una cuenta recién creada, para mostrar la aprobación
+    { ...base, id: uuid(), nombre: 'Martín Gómez', email: null, telefono: '+59897555666', rol: 'operario', activo: false, pendiente: true },
+  ];
+  const [marcela, juan, nico] = p as [PerfilDemo, PerfilDemo, PerfilDemo];
 
   const direcciones: DireccionBase[] = [];
   const movimientos: MovBase[] = [];
@@ -151,6 +161,14 @@ function yo() {
   return p;
 }
 
+function buscarPorIdentificador(id: Identificador) {
+  return db().perfiles.find((x) => ('email' in id ? x.email === id.email : x.telefono === id.phone));
+}
+
+function sinPassword({ password: _p, ...perfil }: PerfilDemo): Perfil {
+  return perfil;
+}
+
 function recalcularEstado(d: DireccionBase) {
   d.estado = d.saldo_cajas + d.saldo_cajones === 0 ? 'completada' : 'pendiente';
 }
@@ -158,13 +176,27 @@ function recalcularEstado(d: DireccionBase) {
 // ---------------- API equivalente ----------------
 
 export const demo = {
-  async ingresar(email: string, password: string): Promise<Perfil | string> {
+  async ingresar(id: Identificador, password: string): Promise<Perfil | string> {
     await pausa();
-    const p = db().perfiles.find((x) => x.email === email.trim().toLowerCase() && x.password === password);
-    if (!p) return 'Email o contraseña incorrectos.';
-    if (!p.activo) return 'Tu usuario está desactivado. Hablá con un administrador.';
+    const p = buscarPorIdentificador(id);
+    if (!p || p.password !== password) {
+      return 'email' in id ? 'Email o contraseña incorrectos.' : 'Celular o contraseña incorrectos.';
+    }
+    if (p.pendiente) return 'Tu cuenta está esperando que un administrador la apruebe.';
+    if (!p.activo) return 'Tu cuenta está desactivada. Hablá con un administrador.';
     sesionId = p.id;
-    return p;
+    return sinPassword(p);
+  },
+
+  async registrarse(nombre: string, id: Identificador, password: string): Promise<true | string> {
+    await pausa();
+    if (buscarPorIdentificador(id)) return 'Ya hay una cuenta con ese email o celular.';
+    db().perfiles.push({
+      id: uuid(), nombre, password, rol: 'operario', activo: false, pendiente: true,
+      email: 'email' in id ? id.email : null, telefono: 'phone' in id ? id.phone : null,
+    });
+    guardar();
+    return true;
   },
   salir() {
     sesionId = null;
@@ -291,6 +323,7 @@ export const demo = {
       direcciones_pendientes: dirs.filter((d) => d.estado === 'pendiente').length,
       direcciones_atrasadas: dirs.filter((d) => d.atrasada).length,
       dias_alerta: db().diasAlerta,
+      cuentas_pendientes: db().perfiles.filter((p) => p.pendiente).length,
     };
   },
 
@@ -302,33 +335,33 @@ export const demo = {
 
   async obtenerPerfil(id: string) {
     const p = db().perfiles.find((x) => x.id === id);
-    if (!p) return null;
-    const { email: _e, password: _p, ...perfil } = p;
-    return perfil;
+    return p ? sinPassword(p) : null;
   },
 
   async listarUsuarios() {
     await pausa();
     return db()
-      .perfiles.map(({ email: _e, password: _p, ...perfil }) => perfil)
+      .perfiles.map(sinPassword)
       .sort((x, y) => x.nombre.localeCompare(y.nombre));
   },
 
-  async actualizarUsuario(id: string, cambios: Partial<Pick<Perfil, 'rol' | 'activo'>>) {
+  async actualizarUsuario(id: string, cambios: Partial<Pick<Perfil, 'rol' | 'activo' | 'pendiente'>>) {
+    await pausa();
     if (yo().rol !== 'administrador') throw new ErrorDemo('Solo un administrador puede modificar usuarios.');
-    Object.assign(db().perfiles.find((x) => x.id === id)!, cambios);
+    const u = db().perfiles.find((x) => x.id === id)!;
+    const dejaDeSerAdmin = u.rol === 'administrador' && u.activo && (cambios.rol === 'operario' || cambios.activo === false);
+    if (dejaDeSerAdmin && !db().perfiles.some((x) => x.id !== id && x.rol === 'administrador' && x.activo)) {
+      throw new ErrorDemo('Tiene que quedar al menos un administrador activo.');
+    }
+    Object.assign(u, cambios);
     guardar();
   },
 
-  async crearUsuario(datos: { nombre: string; email: string; password: string; telefono?: string; rol: Rol }) {
+  async restablecerContrasena(id: string, password: string) {
     await pausa();
-    if (yo().rol !== 'administrador') throw new ErrorDemo('Solo un administrador puede crear usuarios.');
-    const email = datos.email.trim().toLowerCase();
-    if (db().perfiles.some((p) => p.email === email)) throw new ErrorDemo('Ya existe un usuario con ese email.');
-    db().perfiles.push({
-      id: uuid(), email, password: datos.password, nombre: datos.nombre, telefono: datos.telefono ?? null,
-      rol: datos.rol, activo: true,
-    });
+    if (yo().rol !== 'administrador') throw new ErrorDemo('Solo un administrador puede cambiar contraseñas.');
+    if (password.length < 8) throw new ErrorDemo('La contraseña debe tener al menos 8 caracteres.');
+    db().perfiles.find((x) => x.id === id)!.password = password;
     guardar();
   },
 };

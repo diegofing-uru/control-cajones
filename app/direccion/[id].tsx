@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { avisar } from '../../src/lib/avisar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import {
-  Alert,
   FlatList,
   Linking,
   Modal,
@@ -213,7 +213,7 @@ function EditarContacto({
               contacto_telefono: limpiar(v.contacto_telefono),
             });
           } catch (e) {
-            Alert.alert('No se pudo guardar', e instanceof Error ? e.message : '');
+            avisar('No se pudo guardar', e instanceof Error ? e.message : '');
           } finally {
             setGuardando(false);
           }
@@ -258,7 +258,7 @@ function AnularMovimiento({
           try {
             await onConfirmar(motivo);
           } catch (e) {
-            Alert.alert('No se pudo anular', e instanceof Error ? e.message : '');
+            avisar('No se pudo anular', e instanceof Error ? e.message : '');
           } finally {
             setCargando(false);
           }

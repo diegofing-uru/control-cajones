@@ -5,9 +5,12 @@ export type EstadoDireccion = 'pendiente' | 'completada';
 export interface Perfil {
   id: string;
   nombre: string;
+  email: string | null;
   telefono: string | null;
   rol: Rol;
   activo: boolean;
+  /** Cuenta creada por la persona, esperando que un administrador la apruebe */
+  pendiente: boolean;
 }
 
 export interface Direccion {
@@ -49,6 +52,7 @@ export interface Resumen {
   direcciones_pendientes: number;
   direcciones_atrasadas: number;
   dias_alerta: number;
+  cuentas_pendientes: number;
 }
 
 /** Lo que se guarda en la cola offline y se envía a la RPC */

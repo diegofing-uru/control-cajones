@@ -1,21 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
+import { avisar } from '../src/lib/avisar';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Boton } from '../src/components/Boton';
 import { Pantalla } from '../src/components/Pantalla';
-import { actualizarUsuario, crearUsuario, listarUsuarios } from '../src/lib/api';
+import { actualizarUsuario, aprobarUsuario, listarUsuarios, rechazarUsuario, restablecerContrasena } from '../src/lib/api';
 import { useAuth } from '../src/lib/auth';
 import { iniciales } from '../src/lib/formato';
 import { useDatos } from '../src/lib/hooks';
-import type { Perfil, Rol } from '../src/lib/types';
+import { mostrarCelular } from '../src/lib/identificador';
+import type { Perfil } from '../src/lib/types';
 import { useTema } from '../src/theme';
+
+const contacto = (u: Perfil) => [u.email, mostrarCelular(u.telefono)].filter(Boolean).join('  ·  ');
 
 export default function Usuarios() {
   const { c, f } = useTema();
   const { perfil: yo, esAdmin } = useAuth();
-  const { datos, recargar } = useDatos(listarUsuarios, ['perfiles']);
-  const [creando, setCreando] = useState(false);
+  const { datos, refrescando, recargar } = useDatos(listarUsuarios, ['perfiles']);
+  const [cambiandoClave, setCambiandoClave] = useState<Perfil | null>(null);
 
   if (!esAdmin) {
     return (
@@ -25,140 +29,182 @@ export default function Usuarios() {
     );
   }
 
-  const cambiar = async (u: Perfil, cambios: Partial<Pick<Perfil, 'rol' | 'activo'>>) => {
+  const ejecutar = async (accion: () => Promise<void>) => {
     try {
-      await actualizarUsuario(u.id, cambios);
+      await accion();
       recargar();
     } catch (e) {
-      Alert.alert('No se pudo actualizar', e instanceof Error ? e.message : '');
+      const mensaje = e instanceof Error ? e.message : 'Probá de nuevo.';
+      avisar('No se pudo completar', mensaje);
     }
   };
+
+  const pendientes = (datos ?? []).filter((u) => u.pendiente);
+  const equipo = (datos ?? []).filter((u) => !u.pendiente);
+
+  const Avatar = ({ u }: { u: Perfil }) => (
+    <View style={[estilos.avatar, { backgroundColor: c.superficieAlt }]}>
+      <Text style={{ fontFamily: f.fuerte, color: c.texto }}>{iniciales(u.nombre)}</Text>
+    </View>
+  );
 
   return (
     <Pantalla
       titulo="Usuarios"
-      subtitulo="Quién puede registrar movimientos"
+      subtitulo="Quién puede usar la app"
       accion={
         <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Volver">
           <Ionicons name="close" size={28} color={c.texto} />
         </Pressable>
       }
     >
-      <FlatList
-        data={datos ?? []}
-        keyExtractor={(u) => u.id}
+      <ScrollView
         contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
-        ListHeaderComponent={
-          creando ? (
-            <FormularioUsuario
-              onCancelar={() => setCreando(false)}
-              onCreado={() => {
-                setCreando(false);
-                recargar();
-              }}
-            />
-          ) : (
-            <Boton titulo="Agregar empleado" onPress={() => setCreando(true)} estilo={{ marginBottom: 6 }} />
-          )
-        }
-        renderItem={({ item: u }) => {
+        refreshControl={<RefreshControl refreshing={refrescando} onRefresh={recargar} tintColor={c.textoSuave} />}
+      >
+        {pendientes.length > 0 && (
+          <>
+            <Text style={[estilos.seccion, { fontFamily: f.titulo, color: c.texto }]}>
+              Esperando aprobación ({pendientes.length})
+            </Text>
+            {pendientes.map((u) => (
+              <View key={u.id} style={[estilos.tarjeta, { backgroundColor: c.superficie, borderColor: c.pendiente }]}>
+                <View style={estilos.fila}>
+                  <Avatar u={u} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: f.fuerte, fontSize: 16, color: c.texto }}>{u.nombre}</Text>
+                    <Text style={{ fontFamily: f.texto, fontSize: 14, color: c.textoSuave }}>{contacto(u)}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Boton
+                    titulo="Rechazar"
+                    variante="secundario"
+                    estilo={{ flex: 1, minHeight: 46 }}
+                    onPress={() => ejecutar(() => rechazarUsuario(u.id))}
+                  />
+                  <Boton titulo="Aprobar" estilo={{ flex: 1, minHeight: 46 }} onPress={() => ejecutar(() => aprobarUsuario(u.id))} />
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
+        <Text style={[estilos.seccion, { fontFamily: f.titulo, color: c.texto }]}>Equipo</Text>
+        <Text style={{ fontFamily: f.texto, fontSize: 14, color: c.textoSuave, marginTop: -6 }}>
+          Tocá el rol para cambiarlo. El interruptor activa o desactiva la cuenta.
+        </Text>
+        {equipo.map((u) => {
           const soyYo = u.id === yo?.id;
           return (
-            <View style={[estilos.fila, { backgroundColor: c.superficie, borderColor: c.linea, opacity: u.activo ? 1 : 0.55 }]}>
-              <View style={[estilos.avatar, { backgroundColor: c.superficieAlt }]}>
-                <Text style={{ fontFamily: f.fuerte, color: c.texto }}>{iniciales(u.nombre)}</Text>
+            <View
+              key={u.id}
+              style={[estilos.tarjeta, { backgroundColor: c.superficie, borderColor: c.linea, opacity: u.activo ? 1 : 0.6 }]}
+            >
+              <View style={estilos.fila}>
+                <Avatar u={u} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontFamily: f.fuerte, fontSize: 16, color: c.texto }}>
+                    {u.nombre}
+                    {soyYo ? ' (vos)' : ''}
+                  </Text>
+                  <Text style={{ fontFamily: f.texto, fontSize: 13, color: c.textoSuave }}>{contacto(u)}</Text>
+                </View>
+                <Switch
+                  value={u.activo}
+                  disabled={soyYo}
+                  onValueChange={(activo) => ejecutar(() => actualizarUsuario(u.id, { activo }))}
+                  trackColor={{ true: c.ok, false: c.linea }}
+                  accessibilityLabel={`${u.activo ? 'Desactivar' : 'Activar'} a ${u.nombre}`}
+                />
               </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ fontFamily: f.fuerte, fontSize: 16, color: c.texto }}>
-                  {u.nombre}
-                  {soyYo ? ' (vos)' : ''}
-                </Text>
+              <View style={estilos.acciones}>
                 <Pressable
                   disabled={soyYo}
-                  onPress={() => cambiar(u, { rol: u.rol === 'administrador' ? 'operario' : 'administrador' })}
-                  hitSlop={6}
+                  onPress={() =>
+                    ejecutar(() => actualizarUsuario(u.id, { rol: u.rol === 'administrador' ? 'operario' : 'administrador' }))
+                  }
+                  style={[estilos.chip, { borderColor: c.linea, backgroundColor: u.rol === 'administrador' ? c.texto : c.superficie }]}
                 >
-                  <Text style={{ fontFamily: f.medio, fontSize: 14, color: c.textoSuave }}>
+                  <Text style={{ fontFamily: f.medio, color: u.rol === 'administrador' ? c.fondo : c.texto }}>
                     {u.rol === 'administrador' ? 'Administrador' : 'Operario'}
-                    {soyYo ? '' : ' · tocar para cambiar'}
                   </Text>
                 </Pressable>
+                <Pressable onPress={() => setCambiandoClave(u)} hitSlop={6} style={estilos.enlace}>
+                  <Ionicons name="key-outline" size={16} color={c.textoSuave} />
+                  <Text style={{ fontFamily: f.medio, color: c.textoSuave }}>Nueva contraseña</Text>
+                </Pressable>
               </View>
-              <Switch
-                value={u.activo}
-                disabled={soyYo}
-                onValueChange={(activo) => cambiar(u, { activo })}
-                trackColor={{ true: c.ok, false: c.linea }}
-                accessibilityLabel={`${u.activo ? 'Desactivar' : 'Activar'} a ${u.nombre}`}
-              />
             </View>
           );
-        }}
-      />
+        })}
+      </ScrollView>
+
+      {cambiandoClave && (
+        <NuevaContrasena
+          u={cambiandoClave}
+          onCerrar={() => setCambiandoClave(null)}
+          onGuardar={async (pw) => {
+            await restablecerContrasena(cambiandoClave.id, pw);
+            setCambiandoClave(null);
+          }}
+        />
+      )}
     </Pantalla>
   );
 }
 
-function FormularioUsuario({ onCancelar, onCreado }: { onCancelar: () => void; onCreado: () => void }) {
+function NuevaContrasena({ u, onCerrar, onGuardar }: { u: Perfil; onCerrar: () => void; onGuardar: (pw: string) => Promise<void> }) {
   const { c, f } = useTema();
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [rol, setRol] = useState<Rol>('operario');
+  const [pw, setPw] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
-  const input = [estilos.input, { backgroundColor: c.superficie, borderColor: c.linea, color: c.texto, fontFamily: f.texto }];
-
-  const crear = async () => {
-    setCargando(true);
-    setError(null);
-    try {
-      await crearUsuario({ nombre: nombre.trim(), email: email.trim(), password, telefono: telefono.trim() || undefined, rol });
-      onCreado();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo crear el usuario.');
-    } finally {
-      setCargando(false);
-    }
-  };
-
   return (
-    <View style={{ gap: 10, marginBottom: 12 }}>
-      <Text style={{ fontFamily: f.titulo, fontSize: 22, color: c.texto }}>Nuevo empleado</Text>
-      <TextInput style={input} placeholder="Nombre y apellido" placeholderTextColor={c.textoSuave} value={nombre} onChangeText={setNombre} />
-      <TextInput style={input} placeholder="Email" placeholderTextColor={c.textoSuave} value={email} onChangeText={setEmail}
-        autoCapitalize="none" keyboardType="email-address" />
-      <TextInput style={input} placeholder="Contraseña inicial (mínimo 8)" placeholderTextColor={c.textoSuave} value={password}
-        onChangeText={setPassword} secureTextEntry />
-      <TextInput style={input} placeholder="Celular (para WhatsApp, opcional)" placeholderTextColor={c.textoSuave} value={telefono}
-        onChangeText={setTelefono} keyboardType="phone-pad" />
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {(['operario', 'administrador'] as const).map((r) => (
-          <Pressable
-            key={r}
-            onPress={() => setRol(r)}
-            style={[estilos.chip, { borderColor: c.linea, backgroundColor: rol === r ? c.texto : c.superficie }]}
-          >
-            <Text style={{ fontFamily: f.medio, color: rol === r ? c.fondo : c.texto }}>
-              {r === 'operario' ? 'Operario' : 'Administrador'}
-            </Text>
-          </Pressable>
-        ))}
+    <Modal transparent animationType="slide" onRequestClose={onCerrar}>
+      <Pressable style={estilos.fondoModal} onPress={onCerrar} />
+      <View style={[estilos.hoja, { backgroundColor: c.fondo }]}>
+        <Text style={{ fontFamily: f.titulo, fontSize: 24, color: c.texto }}>Nueva contraseña</Text>
+        <Text style={{ fontFamily: f.texto, fontSize: 15, color: c.textoSuave }}>
+          Para {u.nombre}. Pasásela en persona o por mensaje; puede usarla para ingresar desde ahora.
+        </Text>
+        <TextInput
+          style={[estilos.input, { backgroundColor: c.superficie, borderColor: c.linea, color: c.texto, fontFamily: f.texto }]}
+          placeholder="Mínimo 8 caracteres"
+          placeholderTextColor={c.textoSuave}
+          value={pw}
+          onChangeText={setPw}
+          autoCapitalize="none"
+        />
+        {error && <Text style={{ fontFamily: f.medio, color: c.atrasada }}>{error}</Text>}
+        <Boton
+          titulo="Guardar contraseña"
+          cargando={cargando}
+          deshabilitado={pw.length < 8}
+          onPress={async () => {
+            setCargando(true);
+            setError(null);
+            try {
+              await onGuardar(pw);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'No se pudo guardar.');
+              setCargando(false);
+            }
+          }}
+        />
       </View>
-      {error && <Text style={{ fontFamily: f.medio, color: c.atrasada }}>{error}</Text>}
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Boton titulo="Cancelar" variante="secundario" onPress={onCancelar} estilo={{ flex: 1 }} />
-        <Boton titulo="Crear empleado" onPress={crear} cargando={cargando} estilo={{ flex: 1 }}
-          deshabilitado={!nombre.trim() || !email.trim() || password.length < 8} />
-      </View>
-    </View>
+    </Modal>
   );
 }
 
 const estilos = StyleSheet.create({
-  fila: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  seccion: { fontSize: 22, marginTop: 8 },
+  tarjeta: { padding: 14, borderRadius: 14, borderWidth: 1, gap: 12 },
+  fila: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  acciones: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  chip: { paddingHorizontal: 14, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center' },
+  enlace: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  fondoModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  hoja: { padding: 24, paddingBottom: 40, gap: 12, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   input: { height: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontSize: 16 },
-  chip: { paddingHorizontal: 16, height: 40, borderRadius: 20, borderWidth: 1, justifyContent: 'center' },
 });

@@ -1,6 +1,6 @@
 import { DEMO, ErrorDemo, demo } from './demo';
 import { supabase } from './supabase';
-import type { Direccion, Movimiento, NuevoMovimiento, Perfil, Resumen, Rol } from './types';
+import type { Direccion, Movimiento, NuevoMovimiento, Perfil, Resumen } from './types';
 
 /** Error de negocio (validación del servidor) — no tiene sentido reintentarlo */
 export class ErrorNegocio extends Error {}
@@ -115,6 +115,7 @@ export async function resumenPanel(): Promise<Resumen> {
     direcciones_pendientes: Number(r.direcciones_pendientes),
     direcciones_atrasadas: Number(r.direcciones_atrasadas),
     dias_alerta: Number(r.dias_alerta),
+    cuentas_pendientes: Number(r.cuentas_pendientes),
   };
 }
 
@@ -138,23 +139,25 @@ export async function listarUsuarios(): Promise<Perfil[]> {
   return data ?? [];
 }
 
-export async function actualizarUsuario(id: string, cambios: Partial<Pick<Perfil, 'rol' | 'activo'>>): Promise<void> {
+export async function actualizarUsuario(
+  id: string,
+  cambios: Partial<Pick<Perfil, 'rol' | 'activo' | 'pendiente'>>,
+): Promise<void> {
   if (DEMO) return viaDemo(() => demo.actualizarUsuario(id, cambios));
   const { error } = await supabase.from('perfiles').update(cambios).eq('id', id);
   lanzar(error);
 }
 
-export async function crearUsuario(datos: {
-  nombre: string;
-  email: string;
-  password: string;
-  telefono?: string;
-  rol: Rol;
-}): Promise<void> {
-  if (DEMO) return viaDemo(() => demo.crearUsuario(datos));
-  const { data, error } = await supabase.functions.invoke('crear-usuario', { body: datos });
+export const aprobarUsuario = (id: string) => actualizarUsuario(id, { activo: true, pendiente: false });
+export const rechazarUsuario = (id: string) => actualizarUsuario(id, { activo: false, pendiente: false });
+
+export async function restablecerContrasena(usuarioId: string, password: string): Promise<void> {
+  if (DEMO) return viaDemo(() => demo.restablecerContrasena(usuarioId, password));
+  const { data, error } = await supabase.functions.invoke('restablecer-contrasena', {
+    body: { usuario_id: usuarioId, password },
+  });
   if (error) {
-    let mensaje = 'No se pudo crear el usuario.';
+    let mensaje = 'No se pudo cambiar la contraseña.';
     try {
       const cuerpo = await (error as { context?: Response }).context?.json();
       if (cuerpo?.error) mensaje = cuerpo.error;

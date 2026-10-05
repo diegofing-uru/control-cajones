@@ -11,7 +11,7 @@ Este repositorio es el **MVP** (historias HU-01 a HU-07). La carga por WhatsApp 
 - **Pendientes:** direcciones con inventario afuera, ordenadas por antigüedad. Se marcan en rojo cuando pasan los días configurados.
 - **Trazabilidad:** cada dirección tiene su línea de tiempo con usuario, fecha y hora. Los movimientos nunca se borran; un administrador puede anularlos con motivo y queda registrado.
 - **Panel del administrador:** total de cajas y cajones afuera, direcciones atrasadas y configuración de la alerta.
-- **Usuarios y roles:** operario o administrador; un usuario desactivado no puede registrar nada.
+- **Cuentas:** registro libre con email o celular uruguayo; un administrador aprueba cada cuenta nueva y puede nombrar otros administradores.
 - **Sin señal:** los movimientos se guardan en el celular y se envían solos al recuperar conexión, sin duplicarse.
 - **Tiempo real:** las listas se actualizan cuando otro empleado registra algo.
 - Modo claro y oscuro automático.
@@ -29,23 +29,24 @@ Este repositorio es el **MVP** (historias HU-01 a HU-07). La carga por WhatsApp 
 ### 1. Crear el proyecto en Supabase
 
 1. Creá un proyecto en [supabase.com](https://supabase.com) (el plan gratuito alcanza).
-2. En **SQL Editor**, pegá y ejecutá el contenido de `supabase/migrations/20261004000000_init.sql`.
-3. Desplegá la función para crear empleados (necesita la [CLI de Supabase](https://supabase.com/docs/guides/cli)):
+2. En **SQL Editor**, ejecutá en orden los archivos de `supabase/migrations/`.
+3. En **Authentication > Sign In / Providers**:
+   - **Email:** activado, con **Confirm email** desactivado.
+   - **Phone:** activado, con **Confirm phone** desactivado. No hace falta configurar un proveedor de SMS: el control de acceso lo hace la aprobación del administrador.
+4. Desplegá la función para asignar contraseñas nuevas (necesita la [CLI de Supabase](https://supabase.com/docs/guides/cli)):
 
    ```bash
    supabase login
    supabase link --project-ref TU_PROJECT_REF
-   supabase functions deploy crear-usuario
+   supabase functions deploy restablecer-contrasena
    ```
 
-4. Creá el primer administrador: en **Authentication > Users > Add user** creá tu usuario con email y contraseña. Después, en el SQL Editor:
+### Cuentas y roles
 
-   ```sql
-   update perfiles set rol = 'administrador', nombre = 'Tu Nombre'
-   where id = (select id from auth.users where email = 'tu@email.com');
-   ```
-
-   Los demás empleados se crean desde la app: **Panel > Usuarios > Agregar empleado**.
+- **Registro libre:** cualquiera puede crear su cuenta desde la app con email o celular uruguayo y contraseña.
+- **La primera cuenta del sistema queda como administrador.** Entregale la app al cliente vacía para que se registre primero.
+- **Las siguientes quedan como operario pendiente.** No pueden ver ni cargar nada hasta que un administrador las apruebe en **Panel > Usuarios**.
+- El administrador puede aprobar, rechazar, desactivar, nombrar otros administradores y asignar contraseñas nuevas. Siempre queda al menos un administrador activo.
 
 ### 2. Correr la app
 
@@ -65,7 +66,7 @@ Con `EXPO_PUBLIC_DEMO=1` la app usa datos de prueba guardados en el dispositivo,
 EXPO_PUBLIC_DEMO=1 EXPO_PUBLIC_SUPABASE_URL=https://demo.supabase.co EXPO_PUBLIC_SUPABASE_ANON_KEY=demo npx expo start --web
 ```
 
-Usuarios de prueba: `admin@demo.uy` (administradora) y `juan@demo.uy` (operario), contraseña `demo1234`.
+Usuarios de prueba: `admin@demo.uy` (administradora) y el celular `098 111 222` (operario), contraseña `demo1234`. Hay una cuenta pendiente de aprobación para probar ese flujo.
 
 ### Demo publicada en GitHub Pages
 
@@ -78,7 +79,7 @@ app/                     Pantallas (Expo Router)
   (tabs)/                Pendientes, Buscar, Historial, Panel
   direccion/[id].tsx     Detalle con saldo, contacto y línea de tiempo
   movimiento/nuevo.tsx   Registrar entrega o retiro
-  usuarios.tsx           Gestión de empleados (administradores)
+  usuarios.tsx           Aprobación de cuentas, roles y contraseñas
   login.tsx
 src/
   components/            Saldo, Stepper, tarjetas, íconos de caja y cajón
@@ -87,7 +88,7 @@ src/
   theme.ts               Colores y tipografía
 supabase/
   migrations/            Esquema, reglas de saldo, permisos
-  functions/             Edge Function para crear usuarios
+  functions/             Edge Function para asignar contraseñas
 ```
 
 ## Reglas de negocio en la base de datos
