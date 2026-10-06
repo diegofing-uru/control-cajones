@@ -76,6 +76,16 @@ export default function DetalleDireccion() {
         {d.referencia ? <Text style={{ fontFamily: f.texto, fontSize: 16, color: c.textoSuave }}>{d.referencia}</Text> : null}
       </View>
 
+      {d.destino_previsto && !sinSaldo ? (
+        <View style={[estilos.contacto, { backgroundColor: c.superficie, borderColor: c.linea }]}>
+          <Ionicons name="arrow-forward-circle-outline" size={28} color={c.pendiente} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: f.texto, fontSize: 13, color: c.textoSuave }}>Se muda a</Text>
+            <Text style={{ fontFamily: f.fuerte, color: c.texto }}>{d.destino_previsto}</Text>
+          </View>
+        </View>
+      ) : null}
+
       {d.contacto_nombre || d.contacto_telefono ? (
         <Pressable
           disabled={!d.contacto_telefono}
@@ -112,6 +122,13 @@ export default function DetalleDireccion() {
           onPress={() => router.push({ pathname: '/movimiento/nuevo', params: { direccionId: d.id, tipo: 'entrega' } })}
         />
       </View>
+      {!sinSaldo && (
+        <Boton
+          titulo="Registrar mudanza"
+          variante="secundario"
+          onPress={() => router.push({ pathname: '/movimiento/nuevo', params: { direccionId: d.id, tipo: 'mudanza' } })}
+        />
+      )}
 
       <Text style={{ fontFamily: f.titulo, fontSize: 24, color: c.texto, marginTop: 8 }}>Movimientos</Text>
       {esAdmin && datos.movimientos.length > 0 && (
@@ -139,7 +156,12 @@ export default function DetalleDireccion() {
       />
       {editando && (
         <EditarContacto
-          inicial={{ referencia: d.referencia, contacto_nombre: d.contacto_nombre, contacto_telefono: d.contacto_telefono }}
+          inicial={{
+            referencia: d.referencia,
+            contacto_nombre: d.contacto_nombre,
+            contacto_telefono: d.contacto_telefono,
+            destino_previsto: d.destino_previsto,
+          }}
           onCerrar={() => setEditando(false)}
           onGuardar={async (campos) => {
             await actualizarContacto(d.id, campos);
@@ -163,7 +185,12 @@ export default function DetalleDireccion() {
   );
 }
 
-type Contacto = { referencia: string | null; contacto_nombre: string | null; contacto_telefono: string | null };
+type Contacto = {
+  referencia: string | null;
+  contacto_nombre: string | null;
+  contacto_telefono: string | null;
+  destino_previsto: string | null;
+};
 
 function Hoja({ titulo, children, onCerrar }: { titulo: string; children: ReactNode; onCerrar: () => void }) {
   const { c, f } = useTema();
@@ -201,6 +228,8 @@ function EditarContacto({
         value={v.contacto_nombre ?? ''} onChangeText={(t) => setV({ ...v, contacto_nombre: t })} />
       <TextInput style={input} placeholder="Teléfono del cliente" placeholderTextColor={c.textoSuave} keyboardType="phone-pad"
         value={v.contacto_telefono ?? ''} onChangeText={(t) => setV({ ...v, contacto_telefono: t })} />
+      <TextInput style={input} placeholder="Se muda a (opcional)" placeholderTextColor={c.textoSuave}
+        value={v.destino_previsto ?? ''} onChangeText={(t) => setV({ ...v, destino_previsto: t })} />
       <Boton
         titulo="Guardar datos"
         cargando={guardando}
@@ -211,6 +240,7 @@ function EditarContacto({
               referencia: limpiar(v.referencia),
               contacto_nombre: limpiar(v.contacto_nombre),
               contacto_telefono: limpiar(v.contacto_telefono),
+              destino_previsto: limpiar(v.destino_previsto),
             });
           } catch (e) {
             avisar('No se pudo guardar', e instanceof Error ? e.message : '');
@@ -238,8 +268,9 @@ function AnularMovimiento({
   return (
     <Hoja titulo="Anular movimiento" onCerrar={onCerrar}>
       <Text style={{ fontFamily: f.texto, fontSize: 16, color: c.textoSuave }}>
-        Vas a anular {m.tipo === 'entrega' ? 'la entrega' : 'el retiro'} de {cantidades(m.cajas, m.cajones)} que registró{' '}
-        {m.usuario_nombre}. El saldo se corrige y el movimiento queda tachado en el historial.
+        {m.tipo === 'mudanza_salida' || m.tipo === 'mudanza_llegada'
+          ? `Vas a anular la mudanza de ${cantidades(m.cajas, m.cajones)} ${m.tipo === 'mudanza_salida' ? 'a' : 'desde'} ${m.contraparte_calle} que registró ${m.usuario_nombre}. Los cajones vuelven a la dirección de origen y la mudanza queda tachada en las dos direcciones.`
+          : `Vas a anular ${m.tipo === 'entrega' ? 'la entrega' : 'el retiro'} de ${cantidades(m.cajas, m.cajones)} que registró ${m.usuario_nombre}. El saldo se corrige y el movimiento queda tachado en el historial.`}
       </Text>
       <TextInput
         style={[estilos.input, { backgroundColor: c.superficie, borderColor: c.linea, color: c.texto, fontFamily: f.texto }]}

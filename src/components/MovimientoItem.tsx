@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { cantidades, fechaHora, iniciales } from '../lib/formato';
-import type { Movimiento } from '../lib/types';
+import type { Movimiento, TipoMovimiento } from '../lib/types';
 import { useTema } from '../theme';
 
 interface Props {
@@ -15,13 +16,15 @@ interface Props {
 /** Fila de la línea de tiempo: quién, qué y cuándo */
 export function MovimientoItem({ m, mostrarCalle, ultimo, onLongPress, onPress }: Props) {
   const { c, f } = useTema();
-  const color = m.tipo === 'entrega' ? c.kraft : m.tipo === 'retiro' ? c.ok : c.textoSuave;
-  const verbo =
-    m.tipo === 'entrega'
-      ? 'dejó'
-      : m.tipo === 'retiro'
-        ? 'retiró'
-        : (m.cajas < 0 || m.cajones < 0 ? 'anuló una entrega de' : 'anuló un retiro de');
+  const esMudanza = m.tipo === 'mudanza_salida' || m.tipo === 'mudanza_llegada';
+  const color = m.tipo === 'entrega' ? c.kraft : m.tipo === 'retiro' ? c.ok : esMudanza ? c.pendiente : c.textoSuave;
+  const verbo = {
+    entrega: 'dejó',
+    retiro: 'retiró',
+    mudanza_salida: 'mudó',
+    mudanza_llegada: 'trajo',
+    ajuste: `anuló ${ANULADO[m.anula_tipo ?? (m.cajas < 0 || m.cajones < 0 ? 'entrega' : 'retiro')]} de`,
+  }[m.tipo];
 
   return (
     <Pressable onLongPress={onLongPress} onPress={onPress} style={estilos.fila} delayLongPress={400}>
@@ -38,6 +41,20 @@ export function MovimientoItem({ m, mostrarCalle, ultimo, onLongPress, onPress }
             {cantidades(m.cajas, m.cajones)}
           </Text>
         </Text>
+        {esMudanza && m.contraparte_calle && (
+          <Pressable
+            onPress={() => m.contraparte_direccion_id && router.push(`/direccion/${m.contraparte_direccion_id}`)}
+            style={estilos.mudanza}
+            hitSlop={6}
+            accessibilityRole="link"
+          >
+            <Ionicons name={m.tipo === 'mudanza_salida' ? 'arrow-forward' : 'arrow-back'} size={14} color={c.pendiente} />
+            <Text style={{ fontFamily: f.medio, fontSize: 14, color: c.texto, flexShrink: 1 }} numberOfLines={1}>
+              {m.tipo === 'mudanza_salida' ? 'a ' : 'desde '}
+              {m.contraparte_calle}
+            </Text>
+          </Pressable>
+        )}
         {mostrarCalle && (
           <Text style={{ fontFamily: f.medio, fontSize: 14, color: c.texto }} numberOfLines={1}>
             {m.calle}
@@ -56,7 +73,16 @@ export function MovimientoItem({ m, mostrarCalle, ultimo, onLongPress, onPress }
   );
 }
 
+const ANULADO: Record<TipoMovimiento, string> = {
+  entrega: 'una entrega',
+  retiro: 'un retiro',
+  mudanza_salida: 'una mudanza',
+  mudanza_llegada: 'una mudanza',
+  ajuste: 'un ajuste',
+};
+
 const estilos = StyleSheet.create({
+  mudanza: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   fila: { flexDirection: 'row', gap: 12, paddingHorizontal: 20 },
   riel: { alignItems: 'center', width: 36 },
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },

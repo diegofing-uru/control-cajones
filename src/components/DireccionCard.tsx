@@ -34,6 +34,14 @@ export function DireccionCard({ d }: { d: Direccion }) {
             {[d.contacto_nombre, d.referencia].filter(Boolean).join(' — ')}
           </Text>
         )}
+        {d.destino_previsto ? (
+          <View style={estilos.destino}>
+            <Ionicons name="arrow-forward" size={14} color={c.pendiente} />
+            <Text style={{ color: c.texto, fontFamily: f.medio, fontSize: 14, flexShrink: 1 }} numberOfLines={1}>
+              Se muda a {d.destino_previsto}
+            </Text>
+          </View>
+        ) : null}
         <View style={estilos.pie}>
           <Saldo cajas={d.saldo_cajas} cajones={d.saldo_cajones} />
           <View style={estilos.estado}>
@@ -56,4 +64,5 @@ const estilos = StyleSheet.create({
   calle: { fontSize: 22, flexShrink: 1 },
   pie: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 4 },
   estado: { alignItems: 'flex-end', paddingBottom: 6 },
+  destino: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

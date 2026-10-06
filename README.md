@@ -7,6 +7,7 @@ Este repositorio es el **MVP** (historias HU-01 a HU-07). La carga por WhatsApp 
 ## Qué hace
 
 - **Registrar entregas y retiros** en tres toques: tipo, dirección y cantidades con contadores grandes.
+- **Mudanzas:** cuando el cliente se muda, los cajones pasan de la dirección donde se entregaron a la nueva en un solo paso, y el retiro se registra en la dirección nueva. Si al entregar ya se sabe a dónde se muda, se anota y ese día viene precargado.
 - **Validar el saldo:** no se puede retirar más de lo que hay en la dirección.
 - **Pendientes:** direcciones con inventario afuera, ordenadas por antigüedad. Se marcan en rojo cuando pasan los días configurados.
 - **Trazabilidad:** cada dirección tiene su línea de tiempo con usuario, fecha y hora. Los movimientos nunca se borran; un administrador puede anularlos con motivo y queda registrado.
@@ -99,7 +100,8 @@ supabase/
 ## Reglas de negocio en la base de datos
 
 - `registrar_movimiento`: valida usuario activo, cantidades y saldo; crea la dirección si es nueva; ignora duplicados por `client_id`.
-- `anular_movimiento`: solo administradores; crea un ajuste inverso y deja el original tachado.
+- `registrar_mudanza`: pasa cajas y cajones de una dirección a otra (crea el destino si es nuevo). Deja un movimiento en cada dirección (`mudanza_salida` / `mudanza_llegada`, unidos por `mudanza_id`), copia el contacto al destino si no tiene y el aviso de atrasada del destino cuenta desde la mudanza. Cualquier usuario activo puede registrarla.
+- `anular_movimiento`: solo administradores; crea un ajuste inverso y deja el original tachado. Anular una mudanza deshace las dos puntas.
 - Los usuarios no pueden insertar ni modificar movimientos ni saldos directamente.
 - Las direcciones no se duplican por diferencias de mayúsculas o espacios.
 

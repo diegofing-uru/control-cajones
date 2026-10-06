@@ -26,6 +26,9 @@ export default function Historial() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soloMios]);
 
+  // Una mudanza genera dos movimientos (salida y llegada): en el historial general alcanza con la salida
+  const visibles = (datos ?? []).filter((m) => m.tipo !== 'mudanza_llegada' && m.anula_tipo !== 'mudanza_llegada');
+
   const Filtro = ({ valor, texto }: { valor: boolean; texto: string }) => {
     const activo = soloMios === valor;
     return (
@@ -45,13 +48,13 @@ export default function Historial() {
         <Filtro valor={true} texto="Mis movimientos" />
       </View>
       <FlatList
-        data={datos ?? []}
+        data={visibles}
         keyExtractor={(m) => m.id}
         renderItem={({ item, index }) => (
           <MovimientoItem
             m={item}
             mostrarCalle
-            ultimo={index === (datos?.length ?? 0) - 1}
+            ultimo={index === visibles.length - 1}
             onPress={() => router.push(`/direccion/${item.direccion_id}`)}
           />
         )}

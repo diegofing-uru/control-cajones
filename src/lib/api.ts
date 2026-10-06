@@ -55,7 +55,7 @@ export async function obtenerDireccion(id: string): Promise<Direccion | null> {
 
 export async function actualizarContacto(
   id: string,
-  campos: Pick<Direccion, 'referencia' | 'contacto_nombre' | 'contacto_telefono'>,
+  campos: Pick<Direccion, 'referencia' | 'contacto_nombre' | 'contacto_telefono' | 'destino_previsto'>,
 ): Promise<void> {
   if (DEMO) return viaDemo(() => demo.actualizarContacto(id, campos));
   const { error } = await supabase.from('direcciones').update(campos).eq('id', id);
@@ -84,6 +84,21 @@ export async function historial(usuarioId?: string): Promise<Movimiento[]> {
 
 export async function registrarMovimiento(m: NuevoMovimiento): Promise<void> {
   if (DEMO) return viaDemo(() => demo.registrarMovimiento(m));
+  if (m.tipo === 'mudanza') {
+    const { error } = await supabase.rpc('registrar_mudanza', {
+      p_client_id: m.client_id,
+      p_origen_id: m.direccion_id,
+      p_cajas: m.cajas,
+      p_cajones: m.cajones,
+      p_destino_id: m.destino_id ?? null,
+      p_destino_calle: m.destino_calle ?? null,
+      p_destino_referencia: m.destino_referencia ?? null,
+      p_nota: m.nota ?? null,
+      p_registrado_en: m.registrado_en,
+    });
+    lanzar(error);
+    return;
+  }
   const { error } = await supabase.rpc('registrar_movimiento', {
     p_client_id: m.client_id,
     p_tipo: m.tipo,
@@ -94,6 +109,7 @@ export async function registrarMovimiento(m: NuevoMovimiento): Promise<void> {
     p_referencia: m.referencia ?? null,
     p_nota: m.nota ?? null,
     p_registrado_en: m.registrado_en,
+    p_destino_previsto: m.destino_previsto ?? null,
   });
   lanzar(error);
 }

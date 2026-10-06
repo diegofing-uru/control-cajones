@@ -32,7 +32,7 @@ export function AvisoCola() {
             <Text style={{ fontFamily: f.fuerte, color: c.texto }}>No se pudieron registrar:</Text>
             {rechazos.map((r) => (
               <Text key={r.movimiento.client_id} style={{ fontFamily: f.texto, color: c.textoSuave }}>
-                {r.movimiento.tipo === 'entrega' ? 'Entrega' : 'Retiro'} de{' '}
+                {r.movimiento.tipo === 'entrega' ? 'Entrega' : r.movimiento.tipo === 'retiro' ? 'Retiro' : 'Mudanza'} de{' '}
                 {cantidades(r.movimiento.cajas, r.movimiento.cajones)}: {r.motivo}
               </Text>
             ))}

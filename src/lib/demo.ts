@@ -12,7 +12,7 @@ export const DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
 export class ErrorDemo extends Error {}
 
 type DireccionBase = Omit<Direccion, 'dias_pendiente' | 'atrasada'>;
-type MovBase = Omit<Movimiento, 'calle' | 'usuario_nombre' | 'anulado'>;
+type MovBase = Omit<Movimiento, 'calle' | 'usuario_nombre' | 'anulado' | 'contraparte_direccion_id' | 'contraparte_calle' | 'anula_tipo'>;
 
 type PerfilDemo = Perfil & { password: string };
 
@@ -24,7 +24,7 @@ interface Estado {
   diasAlerta: number;
 }
 
-const CLAVE = 'demo-control-cajones-v2';
+const CLAVE = 'demo-control-cajones-v3';
 const DIA = 86400000;
 
 /** Usuarios para entrar rápido en la demo: Marcela con email, Juan con celular */
@@ -53,7 +53,7 @@ function semilla(): Estado {
 
   const dir = (calle: string, extra: Partial<DireccionBase> = {}) => {
     const d: DireccionBase = {
-      id: uuid(), calle, referencia: null, contacto_nombre: null, contacto_telefono: null,
+      id: uuid(), calle, referencia: null, contacto_nombre: null, contacto_telefono: null, destino_previsto: null,
       saldo_cajas: 0, saldo_cajones: 0, estado: 'completada', ultima_entrega_en: null, creada_en: hace(40), ...extra,
     };
     direcciones.push(d);
@@ -62,7 +62,7 @@ function semilla(): Estado {
   const mov = (d: DireccionBase, usuario: Perfil, tipo: 'entrega' | 'retiro', cajas: number, cajones: number, fecha: string, nota: string | null = null) => {
     movimientos.push({
       id: uuid(), client_id: uuid(), direccion_id: d.id, usuario_id: usuario.id, tipo, cajas, cajones,
-      origen: 'app', nota, anula_id: null, registrado_en: fecha, creado_en: fecha,
+      origen: 'app', nota, anula_id: null, mudanza_id: null, registrado_en: fecha, creado_en: fecha,
     });
     const s = tipo === 'entrega' ? 1 : -1;
     d.saldo_cajas += s * cajas;
@@ -91,6 +91,30 @@ function semilla(): Estado {
   const f = dir('Rambla República de México 5515');
   mov(f, juan, 'entrega', 6, 2, hace(30, 2));
   mov(f, nico, 'retiro', 6, 2, hace(12, 1));
+
+  // Entrega en la que ya se sabe a dónde se muda el cliente
+  const g = dir('Bulevar España 2201', { contacto_nombre: 'Familia Suárez', contacto_telefono: '094 222 333', destino_previsto: 'Av. Brasil 2840' });
+  mov(g, juan, 'entrega', 14, 6, hace(4, 2));
+
+  // Mudanza ya hecha: los cajones pasaron de Cassinoni a Agraciada
+  const h = dir('Cassinoni 1450', { contacto_nombre: 'Sofía Cabrera' });
+  mov(h, nico, 'entrega', 9, 3, hace(10, 4));
+  const i = dir('Av. Agraciada 3120', { contacto_nombre: 'Sofía Cabrera' });
+  const grupo = uuid();
+  const fechaMudanza = hace(1, 5);
+  for (const [d, tipo] of [[h, 'mudanza_salida'], [i, 'mudanza_llegada']] as const) {
+    movimientos.push({
+      id: uuid(), client_id: uuid(), direccion_id: d.id, usuario_id: juan.id, tipo, cajas: 9, cajones: 3,
+      origen: 'app', nota: null, anula_id: null, mudanza_id: grupo, registrado_en: fechaMudanza, creado_en: fechaMudanza,
+    });
+  }
+  h.saldo_cajas = 0;
+  h.saldo_cajones = 0;
+  h.estado = 'completada';
+  i.saldo_cajas = 9;
+  i.saldo_cajones = 3;
+  i.ultima_entrega_en = fechaMudanza;
+  i.estado = 'pendiente';
 
   return { version: 1, perfiles: p, direcciones, movimientos, diasAlerta: 15 };
 }
@@ -147,11 +171,16 @@ function vista(d: DireccionBase): Direccion {
 
 function vistaMov(m: MovBase): Movimiento {
   const s = db();
+  const calle = (id: string) => s.direcciones.find((d) => d.id === id)!.calle;
+  const par = m.mudanza_id ? s.movimientos.find((x) => x.mudanza_id === m.mudanza_id && x.id !== m.id) : undefined;
   return {
     ...m,
-    calle: s.direcciones.find((d) => d.id === m.direccion_id)!.calle,
+    calle: calle(m.direccion_id),
     usuario_nombre: s.perfiles.find((p) => p.id === m.usuario_id)!.nombre,
     anulado: s.movimientos.some((x) => x.anula_id === m.id),
+    contraparte_direccion_id: par?.direccion_id ?? null,
+    contraparte_calle: par ? calle(par.direccion_id) : null,
+    anula_tipo: m.anula_id ? (s.movimientos.find((x) => x.id === m.anula_id)?.tipo ?? null) : null,
   };
 }
 
@@ -171,6 +200,61 @@ function sinPassword({ password: _p, ...perfil }: PerfilDemo): Perfil {
 
 function recalcularEstado(d: DireccionBase) {
   d.estado = d.saldo_cajas + d.saldo_cajones === 0 ? 'completada' : 'pendiente';
+}
+
+function nuevaDireccion(calle: string, referencia?: string): DireccionBase {
+  const d: DireccionBase = {
+    id: uuid(), calle: calle.trim().replace(/\s+/g, ' '), referencia: referencia?.trim() || null,
+    contacto_nombre: null, contacto_telefono: null, destino_previsto: null, saldo_cajas: 0, saldo_cajones: 0,
+    estado: 'completada', ultima_entrega_en: null, creada_en: new Date().toISOString(),
+  };
+  db().direcciones.push(d);
+  return d;
+}
+
+/** Igual que la RPC registrar_mudanza: pasa el saldo del origen al destino */
+function registrarMudanza(m: NuevoMovimiento, usuario: Perfil) {
+  const s = db();
+  const o = s.direcciones.find((x) => x.id === m.direccion_id);
+  if (!o) throw new ErrorDemo('La dirección de origen no existe.');
+  if (m.cajas > o.saldo_cajas || m.cajones > o.saldo_cajones) {
+    throw new ErrorDemo(`En ${o.calle} hay ${cantidadesTexto(o.saldo_cajas, o.saldo_cajones)}: no se puede mudar más de eso.`);
+  }
+  let d = m.destino_id
+    ? s.direcciones.find((x) => x.id === m.destino_id)
+    : s.direcciones.find((x) => normalizar(x.calle) === normalizar(m.destino_calle ?? ''));
+  if (!d) {
+    if (m.destino_id) throw new ErrorDemo('La dirección de destino no existe.');
+    if (!m.destino_calle?.trim()) throw new ErrorDemo('Indicá a qué dirección se mudan.');
+    d = nuevaDireccion(m.destino_calle, m.destino_referencia);
+  }
+  if (d.id === o.id) throw new ErrorDemo('La dirección de destino tiene que ser distinta de la de origen.');
+
+  const ahora = new Date().toISOString();
+  const grupo = uuid();
+  for (const [dir, tipo, clientId] of [[o, 'mudanza_salida', m.client_id], [d, 'mudanza_llegada', uuid()]] as const) {
+    s.movimientos.push({
+      id: uuid(), client_id: clientId, direccion_id: dir.id, usuario_id: usuario.id, tipo, cajas: m.cajas, cajones: m.cajones,
+      origen: 'app', nota: m.nota?.trim() || null, anula_id: null, mudanza_id: grupo, registrado_en: m.registrado_en, creado_en: ahora,
+    });
+  }
+  o.saldo_cajas -= m.cajas;
+  o.saldo_cajones -= m.cajones;
+  o.destino_previsto = null;
+  recalcularEstado(o);
+  if (!d.contacto_nombre && !d.contacto_telefono) {
+    d.contacto_nombre = o.contacto_nombre;
+    d.contacto_telefono = o.contacto_telefono;
+  }
+  d.saldo_cajas += m.cajas;
+  d.saldo_cajones += m.cajones;
+  d.ultima_entrega_en = ahora; // el plazo para retirar cuenta desde la mudanza
+  recalcularEstado(d);
+  guardar();
+}
+
+function cantidadesTexto(cajas: number, cajones: number) {
+  return `${cajas} ${cajas === 1 ? 'caja' : 'cajas'} y ${cajones} ${cajones === 1 ? 'cajón' : 'cajones'}`;
 }
 
 // ---------------- API equivalente ----------------
@@ -227,7 +311,7 @@ export const demo = {
     return d ? vista(d) : null;
   },
 
-  async actualizarContacto(id: string, campos: Pick<Direccion, 'referencia' | 'contacto_nombre' | 'contacto_telefono'>) {
+  async actualizarContacto(id: string, campos: Pick<Direccion, 'referencia' | 'contacto_nombre' | 'contacto_telefono' | 'destino_previsto'>) {
     yo();
     Object.assign(db().direcciones.find((x) => x.id === id)!, campos);
     guardar();
@@ -256,19 +340,17 @@ export const demo = {
     const s = db();
     if (s.movimientos.some((x) => x.client_id === m.client_id)) return;
     if (m.cajas < 0 || m.cajones < 0 || m.cajas + m.cajones === 0) throw new ErrorDemo('Ingresá al menos una caja o un cajón.');
+    if (m.tipo === 'mudanza') return registrarMudanza(m, usuario);
 
     let d = m.direccion_id
       ? s.direcciones.find((x) => x.id === m.direccion_id)
       : s.direcciones.find((x) => normalizar(x.calle) === normalizar(m.calle ?? ''));
     if (!d) {
       if (!m.calle?.trim()) throw new ErrorDemo('Indicá una dirección.');
-      if (m.tipo === 'retiro') throw new ErrorDemo(`No hay cajas ni cajones registrados en ${m.calle.trim()}.`);
-      d = {
-        id: uuid(), calle: m.calle.trim().replace(/\s+/g, ' '), referencia: m.referencia ?? null,
-        contacto_nombre: null, contacto_telefono: null, saldo_cajas: 0, saldo_cajones: 0,
-        estado: 'completada', ultima_entrega_en: null, creada_en: new Date().toISOString(),
-      };
-      s.direcciones.push(d);
+      if (m.tipo === 'retiro') {
+        throw new ErrorDemo(`No hay cajas ni cajones registrados en ${m.calle.trim()}. Si vinieron de otra dirección, registrá primero la mudanza.`);
+      }
+      d = nuevaDireccion(m.calle, m.referencia);
     }
     if (m.tipo === 'retiro') {
       if (m.cajas > d.saldo_cajas) throw new ErrorDemo(`Solo hay ${d.saldo_cajas} ${d.saldo_cajas === 1 ? 'caja registrada' : 'cajas registradas'} en esta dirección.`);
@@ -277,13 +359,16 @@ export const demo = {
     const ahora = new Date().toISOString();
     s.movimientos.push({
       id: uuid(), client_id: m.client_id, direccion_id: d.id, usuario_id: usuario.id, tipo: m.tipo,
-      cajas: m.cajas, cajones: m.cajones, origen: 'app', nota: m.nota ?? null, anula_id: null,
+      cajas: m.cajas, cajones: m.cajones, origen: 'app', nota: m.nota ?? null, anula_id: null, mudanza_id: null,
       registrado_en: m.registrado_en, creado_en: ahora,
     });
     const signo = m.tipo === 'entrega' ? 1 : -1;
     d.saldo_cajas += signo * m.cajas;
     d.saldo_cajones += signo * m.cajones;
-    if (m.tipo === 'entrega') d.ultima_entrega_en = ahora;
+    if (m.tipo === 'entrega') {
+      d.ultima_entrega_en = ahora;
+      if (m.destino_previsto?.trim()) d.destino_previsto = m.destino_previsto.trim().replace(/\s+/g, ' ');
+    }
     recalcularEstado(d);
     guardar();
   },
@@ -297,20 +382,29 @@ export const demo = {
     if (!orig) throw new ErrorDemo('El movimiento no existe.');
     if (orig.tipo === 'ajuste') throw new ErrorDemo('Un ajuste no se puede anular.');
     if (s.movimientos.some((x) => x.anula_id === id)) throw new ErrorDemo('Este movimiento ya fue anulado.');
-    const d = s.direcciones.find((x) => x.id === orig.direccion_id)!;
-    const signo = orig.tipo === 'entrega' ? -1 : 1;
-    if (d.saldo_cajas + signo * orig.cajas < 0 || d.saldo_cajones + signo * orig.cajones < 0) {
-      throw new ErrorDemo('No se puede anular: el saldo actual quedaría negativo. Revisá los retiros posteriores.');
+    // En una mudanza se anulan los dos movimientos (salida y llegada)
+    const aAnular = orig.mudanza_id ? s.movimientos.filter((x) => x.mudanza_id === orig.mudanza_id) : [orig];
+    const cambios = aAnular.map((x) => ({
+      x,
+      d: s.direcciones.find((y) => y.id === x.direccion_id)!,
+      signo: x.tipo === 'entrega' || x.tipo === 'mudanza_llegada' ? -1 : 1,
+    }));
+    for (const { x, d, signo } of cambios) {
+      if (d.saldo_cajas + signo * x.cajas < 0 || d.saldo_cajones + signo * x.cajones < 0) {
+        throw new ErrorDemo(`No se puede anular: el saldo de ${d.calle} quedaría negativo. Revisá los retiros posteriores.`);
+      }
     }
     const ahora = new Date().toISOString();
-    s.movimientos.push({
-      id: uuid(), client_id: uuid(), direccion_id: d.id, usuario_id: usuario.id, tipo: 'ajuste',
-      cajas: signo * orig.cajas, cajones: signo * orig.cajones, origen: 'app', nota: motivo.trim(),
-      anula_id: id, registrado_en: ahora, creado_en: ahora,
-    });
-    d.saldo_cajas += signo * orig.cajas;
-    d.saldo_cajones += signo * orig.cajones;
-    recalcularEstado(d);
+    for (const { x, d, signo } of cambios) {
+      s.movimientos.push({
+        id: uuid(), client_id: uuid(), direccion_id: d.id, usuario_id: usuario.id, tipo: 'ajuste',
+        cajas: signo * x.cajas, cajones: signo * x.cajones, origen: 'app', nota: motivo.trim(),
+        anula_id: x.id, mudanza_id: null, registrado_en: ahora, creado_en: ahora,
+      });
+      d.saldo_cajas += signo * x.cajas;
+      d.saldo_cajones += signo * x.cajones;
+      recalcularEstado(d);
+    }
     guardar();
   },
 
