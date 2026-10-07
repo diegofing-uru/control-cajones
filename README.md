@@ -105,6 +105,13 @@ supabase/
 - Los usuarios no pueden insertar ni modificar movimientos ni saldos directamente.
 - Las direcciones no se duplican por diferencias de mayúsculas o espacios.
 
+## Pruebas automáticas
+
+- `npm test`: pruebas de la app (conteo de días, fechas, cantidades, celulares y emails). Corren solas en GitHub antes de cada publicación: si alguna falla, no se publica.
+- `npm run test:base`: pruebas de las reglas de la base (entregas, retiros, mudanzas, anulaciones, días y alertas, usuarios y permisos). Corren contra el proyecto de Supabase vinculado, cada archivo dentro de una transacción que se deshace siempre al final: no guardan nada. Necesitan `supabase login` y `supabase link`. Correrlas antes y después de cada cambio en la base.
+
+Las pruebas de la base están en `supabase/pruebas/` (las ayudas comunes en `_ayudas.sql`). Cuando aparece un error, conviene agregar la prueba que lo habría detectado.
+
 ## Próximos pasos (fase 2)
 
 - Foto y nota de evidencia (HU-08) y contacto del cliente en el alta (HU-09).
