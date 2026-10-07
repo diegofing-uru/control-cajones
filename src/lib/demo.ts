@@ -4,6 +4,7 @@
  * Se activa con EXPO_PUBLIC_DEMO=1.
  */
 import type { Direccion, Movimiento, NuevoMovimiento, Perfil, Resumen, Rol } from './types';
+import { diasCalendario } from './formato';
 import type { Identificador } from './identificador';
 import { uuid } from './uuid';
 
@@ -165,7 +166,7 @@ const normalizar = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
 function vista(d: DireccionBase): Direccion {
   const pendiente = d.estado === 'pendiente' && d.ultima_entrega_en;
-  const dias = pendiente ? Math.floor((Date.now() - new Date(d.ultima_entrega_en!).getTime()) / DIA) : null;
+  const dias = pendiente ? diasCalendario(d.ultima_entrega_en!) : null;
   return { ...d, dias_pendiente: dias, atrasada: dias !== null && dias >= db().diasAlerta };
 }
 
